@@ -1,4 +1,5 @@
-# public
+# Erik Lundin's projects
+
 A collection of some of my hobby projects.
 
 
