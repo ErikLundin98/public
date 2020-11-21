@@ -1,0 +1,306 @@
+---
+title: "Predicting song genre"
+output: rmarkdown::github_document
+---
+
+## Introduction
+
+While surfing the web I stumbled upon this small sample of the [million song dataset](http://millionsongdataset.com/), which contains features and metadata for a million songs. I thought it would be interesting to explore the dataset and find out if I could create a simple classifier that could categorize the data into genres. As I do not have the required space (~300Gb) on my hard drive, I decided to look for a similar, smaller dataset and found one with 1000 songs instead. This notebook describes how I managed to create a simple classifier that guesses the correct genre for a song with around 75% accuracy
+
+### The dataset
+
+The dataset consists of 1000 songs, each with 28 features and a label (the genre). Some of the features are:
+
+* Tempo
+* Beats per minute
+* MFCC:s, or Mel-frequency cepstral coefficients, that are fourier transforms of the songs' sound signals that are scaled and transformed
+
+### Approach
+
+For this project, I wanted to evaluate how different machine learning models can be implemented in R and the see how I could improve the accuracies of these models by using different parameters. The small sample size of 1000 songs makes it harder to get a sufficient classification rate with simple models, but in the end I managed to get a decent accuracy by using an ensemble classifier.
+
+
+## Data exploration
+
+First of all, the data is imported and reformatted so that it can be used for the purpose. I scaled the data to have a mean of 0 and a standard deviation of 1.
+```{r, results='hide'}
+library(caret)
+# Load the data
+raw_data = read.csv("data.csv")
+```
+
+```{r}
+# Visualize the dataset
+head(raw_data)
+
+# Remove filename feature
+data = subset(raw_data, select = -filename )
+
+# Scale the data to have a mean of 0 and a standard deviation of one
+data[-29] = lapply(data[-29], scale)
+
+# Store label strings in separate array and label dataframe samples by index instead (to get numeric values)
+# Cast labels to factors
+data.labels = sort(unique(data$label))
+data = transform(data, label = match(label, data.labels))
+
+# Data after cleaning
+head(data)
+```
+
+By plotting the correlations as a heat map and scatter plots of each feature, some conclusions are that:
+
+* There is a strong correlation between the mfcc features
+* The "non"-MFCC features are also strongly correlated with each other
+* The genre (label) is not strongly correlated with any of the other features
+* While some of the features appear to be normally distributed, others seem to have more of a beta distribution
+
+```{r, warning=FALSE}
+library(corrplot)
+library(ggplot2)
+library(tidyr)
+
+corrplot(cor(data))
+
+ggplot(gather(data), aes(value)) + 
+    geom_histogram(bins = ncol(data)) + 
+    facet_wrap(~key, scales = 'free_x')
+```
+
+To further visualize and explore the data, Principal Component Analysis is used. Following is a summary of the calculated principal components:
+
+```{r}
+data.pca = prcomp(data, retx=TRUE)
+summary(data.pca)
+```
+
+By plotting the features projected onto a 2D plane with the two first principal components as axes, we can see that there is some separability between the genres. Most of the MFCC features have a high variance in an orthogonal direction to the direction in which there is a high variance of the genre (label). Only a few features seem to covary with the genre.
+```{r}
+library(ggfortify)
+library(factoextra)
+
+# Plot the PCA, showing eigenvectors of the result
+autoplot(data.pca, data=data, loadings=TRUE, colour="label", loadings.label=TRUE, loadings.label.size=3)
+fviz_eig(data.pca)
+```
+To prepare the data for training and testing on some classifiers, it is partitioned into two sets, one for training and one for testing.
+
+```{r}
+# Split into training and validation data, with uniform distribution among labels
+training_indices = createDataPartition(data$label, p=0.75, list=FALSE)
+
+data.train = data[training_indices,]
+data.test = data[-training_indices,]
+```
+
+
+
+## Some different classifiers
+
+Following are some implementations and evaluations of different classifiers.
+
+A helper function to calculate the accuracy given a confusion matrix. 
+```{r, warning=FALSE}
+library(psych)
+
+calc_accuracy = function(cmatr) {
+  return(tr(cmatr)/sum(cmatr))
+}
+```
+
+### Linear Discriminant Analysis
+
+As the plot from the Principal Component Analysis suggests, the different labels seem to form clusters to some extent. Thus, classifiers using Linear Discriminant Analysis could be efficient. Below is a simple classifier using standard LDA, which assumes that the features are normally distributed and have identical covariance matrices.
+```{r}
+library(MASS)
+data.lda = lda(label ~ ., data=data.train)
+data.lda.predictions = predict(data.lda, data.test)
+
+data.lda.table = table(as.numeric(data.lda.predictions$class), data.test$label)
+data.lda.table
+mean(data.lda.predictions$class==data.test$label)
+```
+As we could see from the data exploration, some of the features do not seem to be normally distributed and they do not have similar covariance matrices. This could explain why this classifier only gets ~60% accuracy.
+
+Below are some implementations of other Discriminant Analysis Models:
+
+* Quadratic Discriminant Analysis (QDA), does not assume equal covariance matrices
+* Mixture Discriminant Analysis (MDA), in which each class is assumed to be a Gaussian mix of subclasses
+* Flexible Disriminant Analysis (FDA), uses nin-linear combinations of features
+* RDA, works well when there are a large amount of features compared to samples in the dataset
+
+```{r}
+data.qda = qda(label~., data=data.train)
+data.qda.predictions = predict(data.qda, data.test)
+
+data.qda.table = table(as.numeric(data.qda.predictions$class), data.test$label)
+data.qda.table
+mean(data.qda.predictions$class==data.test$label)
+```
+
+```{r, warning=FALSE}
+library(mda)
+
+data.mda = mda(label~., data=data.train)
+data.mda.predictions = predict(data.mda, data.test)
+
+data.mda.table = table(as.numeric(data.mda.predictions), data.test$label)
+data.mda.table
+mean(data.mda.predictions==data.test$label)
+```
+
+```{r}
+data.fda = mda(label~., data=data.train, method=polyreg)
+data.fda.predictions = predict(data.fda, data.test)
+
+data.fda.table = table(as.numeric(data.lda.predictions$class), data.test$label)
+data.fda.table
+mean(data.fda.predictions==data.test$label)
+```
+```{r, warning=FALSE}
+library(klaR)
+
+data.rda = rda(label~., data=data.train)
+data.rda.predictions = predict(data.rda, data.test)
+
+data.rda.table = table(as.numeric(data.rda.predictions$class), data.test$label)
+data.rda.table
+mean(data.rda.predictions$class==data.test$label)
+```
+While none of these classifiers have an astounding accuracy, the RDA classifier achieves an accuracy of ~70%. Noteworthy is that different classifiers have some classes which they are better than others at predicting.
+
+### K-nearest neighbors
+```{r, warning=FALSE}
+library(kknn)
+
+neighbors_to_test = ceiling(sqrt(dim(data.train)[1]))
+data.knn = train.kknn(as.factor(label) ~ ., data.train, kmax=neighbors_to_test, distance=2, kernel='gaussian')
+data.knn.predictions = predict(data.knn, data.test)
+
+data.knn.table = table(data.knn.predictions, data.test$label)
+data.knn.table
+calc_accuracy(data.knn.table)
+```
+
+K-nearest neighbors seem to perform well, but does not achieve the same accuracy as some of the LDA models.
+
+### Multinomial Logistic Regression
+```{r, warning=FALSE}
+library(nnet)
+
+data.log = multinom(as.factor(label) ~ ., data=data.train)
+
+data.log.predictions = predict(data.log, data.test)
+
+data.log.table = table(data.log.predictions, data.test$label)
+data.log.table
+calc_accuracy(data.log.table)
+```
+Multinomial Logistic Regression uses a multinomial link, which is suitable for our dataset since we have 10 classes. Still, the accuracy is not better than the LDA models. 
+
+### Support Vector Machines
+```{r, warning=FALSE}
+library(e1071)
+
+# SVM with regular, rectangular kernel
+data.svm = svm(as.factor(label) ~ ., data.train, type='C-classification', kernel='linear')
+data.svm.predictions = predict(data.svm, data.test)
+data.svm.table = table(data.svm.predictions, data.test$label)
+calc_accuracy(data.svm.table)
+```
+
+### Kernel Support Vector Machines
+The kernel support vector machines use the kernel trick to implicitly map their decision boundaries to the non-linear space. Here, three different kernel methods are used.
+```{r, warning=FALSE}
+library(kernlab)
+
+# SVM with radial kernel
+data.ksvm.1= ksvm(as.factor(label) ~ ., data.train, type="nu-svc", kernel='rbfdot')
+data.ksvm.1.predictions = predict(data.ksvm.1, data.test)
+data.ksvm.1.table = table(data.ksvm.1.predictions, data.test$label)
+calc_accuracy(data.ksvm.1.table)
+
+data.ksvm.2 = ksvm(as.factor(label) ~ ., data.train, type="nu-svc", kernel='laplacedot')
+data.ksvm.2.predictions = predict(data.ksvm.2, data.test)
+data.ksvm.2.table = table(data.ksvm.2.predictions, data.test$label)
+calc_accuracy(data.ksvm.2.table)
+
+data.ksvm.3 = ksvm(as.factor(label) ~ ., data.train, type="spoc-svc", kernel='rbfdot')
+data.ksvm.3.predictions = predict(data.ksvm.3, data.test)
+data.ksvm.3.table = table(data.ksvm.3.predictions, data.test$label)
+calc_accuracy(data.ksvm.3.table)
+```
+The kernelized support vector machines achieve an accuracy of around 70%.
+
+## Ensemble of classifiers
+Now, a large amount of different models have been fit to the dataset. Among these, the top performers have been the kernelized support vector machines and the RDA and MDA disciminant analyses, with accuracies around 70%. The goal in this last part is to create an ensemble of these classifiers to improve the accuracy even more. First, some helper functions are created.
+```{r}
+# Take a list of classifiers and a dataset and return a list of the model's predictions
+all_predictions = function(classifiers, data) {
+  all_preds = data.frame(matrix(NA, nrow=nrow(data), ncol=length(classifiers)))
+
+  for(i in 1:length(classifiers)) {
+    prediction = predict(classifiers[[i]], data)
+    if(class(prediction) != "factor") {
+      prediction = as.factor(prediction$class)
+    }
+    all_preds[, i] = (prediction)
+  }
+  return(all_preds)
+}
+
+# Select the most likely class by calculating the "likelihood" for each class according to different model's accuracies
+weighted_predictions = function(separate_predictions, weights) {
+  res = apply(separate_predictions, 1, function(x) {
+    
+    score_per_class = replicate(10, 0)
+    for(classifier in 1:length(x)) {
+      score_per_class[as.numeric(x[classifier])] = score_per_class[as.numeric(x[classifier])] + weights[classifier, as.numeric(x[classifier])]
+    }
+    x = which.max(score_per_class)
+  })
+  return(res)
+}
+
+# Take a confusion matrix and calculate the likelihood that the actual class is the predicted one
+# P(class is correct | class = A) = #times the classifier guessed A correctly / #times the classifier guessed A
+calc_accuracy_per_class = function(cmatr) {
+  n = dim(cmatr)[1]
+  weights = numeric(n)
+  
+  for(i in 1:n) {
+    weights[i] = cmatr[i, i]/sum(cmatr[i,])
+  }
+  return(weights)
+}
+
+# Take a list of classifiers and data and computes the accuracies (weights) per class for all classifiers
+calc_weights_with_data = function(classifiers, data) {
+  predictions = all_predictions(classifiers, data)
+  tables = lapply(predictions, function(x) table(x, data$label))
+  accuracies = lapply(tables, calc_accuracy_per_class)
+  weights = matrix(unlist(accuracies), ncol=10, byrow=TRUE)
+  return(weights)
+}
+```
+
+The classifiers perform differently on different classes, so theoretically, a combined classifier should perform better. By combining the three Support Vector Machine models and two Discriminant Analysis Models, the accuracy increases by a few percentage points. The "combined" ensemble model uses weighted classifications from each model to decide which genre to classify each song as.
+```{r}
+classifiers = list(data.rda, data.mda, data.ksvm.1, data.ksvm.2, data.ksvm.3)
+weights = calc_weights_with_data(classifiers, data.test)
+all_testpred = all_predictions(classifiers, data.test)
+weights
+
+ensemble_testpred = weighted_predictions(all_testpred, weights)
+
+ensemble_table = table(as.numeric(ensemble_testpred), data.test$label)
+ensemble_table
+calc_accuracy(ensemble_table)
+```
+## Summary
+
+This project proved that ensemble methods can be an easy way to improve the accuracy of any model. It does however come with a cost: the combined model requires more memory, time and computation. While I am fairly satisfied with this model's performance, it could be improved on in many ways:
+
+* A neural network could be used for the combined classifier, instead of the "maximum weighted voting" approach
+* A boosting method could be used where the training samples are weighted according to previous models performance
+* Posteriors from each model could be used instead of the calculated "weights" and binary features that were used in this ensemble model.
