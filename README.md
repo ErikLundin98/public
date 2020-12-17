@@ -2,6 +2,13 @@
 
 A collection of some of my hobby projects.
 
+## Table of contents
+
+1. [Deep Snake](#Deep-Snake)
+2. [Genre Guessing in R](#Genre-Guess)
+1. [Health Care Chat Bot](#Health-Bot)
+
+<a name="Deep-Snake">
 
 ## Deep Snake
 
@@ -12,12 +19,18 @@ The code can be found in [`deep_snake/`](https://github.com/ErikLundin98/public/
 ![resnake](https://github.com/ErikLundin98/public/blob/main/deep_snake/media/reinforcement_snake.gif)
 ![slsnake](https://github.com/ErikLundin98/public/blob/main/deep_snake/media/supervised_snake.gif)
 
+<a name="Genre-Guess">
+  
 ## Genre Guessing in R
 
 As a way to learn how to implement machine learning models in R, I created a custom ensemble classifier which predicts song genre based on audio features such as average beats per minute, frequency and other more complicated measurements. See the [R Markdown File](https://github.com/ErikLundin98/public/blob/main/genre_guesser/genreguesser.md) for a more detailed report of the classifier and procedure.
 
 The code can be found in [`genre_guesser/`](https://github.com/ErikLundin98/public/tree/main/genre_guesser)
 
+<a name="Health-Bot">
+  
 ## Health Care Chat Bot
+
+![botdemo](https://github.com/ErikLundin98/public/blob/main/health_care_bot/bot-demo.gif)
 
 I have worked in a simulated company of 25 students to develop an open-source health care bot for the local region. The bot can be used to simplify the process of registering health-related measurements as blood pressure and weight. The bot can also help patients to schedule appointments with health care professional and give useful advice for different scenarios. The idea behind the bot is to make health care from home as simple as possible for patients of all demographics with easy to follow instructions and an intuitive conversational flow. A fork of this repository can be found at https://github.com/ErikLundin98/health-care-bot. Note that the deployment pipeline is configured for GitLab and will not deploy in a GitHub repo. 
