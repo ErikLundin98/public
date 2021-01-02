@@ -64,9 +64,10 @@ public class ControlStage {
          BoidAttribute.SEPARATIONRANGE, BoidAttribute.ALIGNMENTSTRENGTH, BoidAttribute.ALIGNMENTRANGE, BoidAttribute.COHESIONSTRENGTH, BoidAttribute.COHESIONRANGE);
         
         table.add(slider);
+        table.add(new Label("Select attribute to edit:", new LabelStyle(skin.getFont("default"), Color.WHITE)));
         table.add(selectBox);
         table.add(boidSlider);
-        table.add(new Label("Amount of boids", new LabelStyle(skin.getFont("default"), Color.WHITE)));
+        table.add(new Label("Edit amount of boids", new LabelStyle(skin.getFont("default"), Color.WHITE)));
         
         slider.setValue(5f);
         boidSlider.setValue(50f);
