@@ -8,10 +8,10 @@ public class Boid {
 
     protected GVec position, velocity;
     protected float[] wallConstraints;
-    private int dimensionality;
+    private int dimensionality, zone;
 
-    public static HashMap<BoidAttribute, Float> attrMap = new HashMap<BoidAttribute, Float>();
-    public static HashMap<BoidAttribute, Float> scaleMap = new HashMap<BoidAttribute, Float>();
+    private static HashMap<BoidAttribute, Float> attrMap = new HashMap<BoidAttribute, Float>();
+    private static HashMap<BoidAttribute, Float> scaleMap = new HashMap<BoidAttribute, Float>();
 
     static {
         attrMap.put(BoidAttribute.WIDTH, 15f);
@@ -41,12 +41,13 @@ public class Boid {
         this.velocity = GVec.RandomGVec(this.dimensionality);
         this.position = GVec.RandomGVec(this.dimensionality, wallConstraints);
         this.wallConstraints = wallConstraints;
+        this.setZone();
     }
 
     public GVec separation(Boid[] boids) {
         GVec separation = new GVec(this.dimensionality);
         for(int i = 0 ; i < boids.length ; i++) {
-            if(boids[i] == this) continue;
+            if(boids[i] == this || boids[i].getZone() != this.zone) continue;
             GVec diff = boids[i].getPos().sub(this.position);
             if(diff.abs() < attrMap.get(BoidAttribute.SEPARATIONRANGE)) {
                 separation = separation.sub(diff).mul(attrMap.get(BoidAttribute.SEPARATIONSTRENGTH));
@@ -58,7 +59,7 @@ public class Boid {
         GVec alignment = new GVec(this.dimensionality);
         int count = 0;
         for(int i = 0 ; i < boids.length ; i++) {
-            if(boids[i] == this) continue;
+            if(boids[i] == this || boids[i].getZone() != this.zone) continue;
             if(this.dist(boids[i]) < attrMap.get(BoidAttribute.ALIGNMENTRANGE)) {
                 alignment = alignment.add(boids[i].getVel());
                 count++;
@@ -73,7 +74,7 @@ public class Boid {
         GVec centerOfMass = new GVec(this.dimensionality);
         int count = 0;
         for(int i = 0 ; i < boids.length ; i++) {
-            if(boids[i] == this) continue;
+            if(boids[i] == this || boids[i].getZone() != this.zone) continue;
             if(this.dist(boids[i]) < attrMap.get(BoidAttribute.COHESIONRANGE)) {
                 centerOfMass = centerOfMass.add(boids[i].getPos());
                 count++;
@@ -100,6 +101,7 @@ public class Boid {
         return avoidVel;
     }
     public void update(Boid[] boids) {
+        this.setZone();
         GVec sepVec = this.separation(boids);
         GVec aliVec = this.alignment(boids);
         GVec cohVec = this.cohesion(boids);
@@ -132,6 +134,17 @@ public class Boid {
 
     public float dist(Boid b) {
         return (float)this.position.sub(b.getPos()).abs();
+    }
+
+    public float getZone() {
+        return this.zone;
+    }
+
+    public void setZone() {
+        this.zone = 1;
+        for(int i = 0 ; i < this.dimensionality ; i++) {
+            this.zone *= Math.max(1, Math.round(this.position.get(i)/this.wallConstraints[i]*Consts.ZONE_STEP_LENGTH));
+        }
     }
 
     public static float getScale(BoidAttribute attr) {

@@ -38,8 +38,8 @@ public class ControlStage {
 		SliderStyle sliderStyle = new SliderStyle();
 		sliderStyle.background = skin.newDrawable("white", Color.BLUE);
 		sliderStyle.knob = skin.newDrawable("white", Color.RED);
-		sliderStyle.knob.setMinWidth(10);
-        sliderStyle.knob.setMinHeight(10);
+		sliderStyle.knob.setMinWidth(30);
+        sliderStyle.knob.setMinHeight(30);
         
         SelectBoxStyle selectBoxStyle = new SelectBoxStyle();
         selectBoxStyle.fontColor = Color.WHITE;
