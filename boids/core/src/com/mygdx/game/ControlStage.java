@@ -32,8 +32,12 @@ public class ControlStage {
 		Pixmap pixmap = new Pixmap(1, 1, Format.RGBA8888);
 		pixmap.setColor(Color.WHITE);
 		pixmap.fill();
-		skin.add("white", new Texture(pixmap));
-		skin.add("default", new BitmapFont());
+        skin.add("white", new Texture(pixmap));
+
+        BitmapFont defaultFont = new BitmapFont();
+        //defaultFont.getRegion().getTexture().setFilter(TextureFilter.Linear, TextureFilter.Linear);
+        defaultFont.getData().setScale(1.5f);
+		skin.add("default", defaultFont);
 		
 		SliderStyle sliderStyle = new SliderStyle();
 		sliderStyle.background = skin.newDrawable("white", Color.BLUE);
