@@ -14,7 +14,5 @@ output/main.o: src/main.cpp
 
 output/finance.o: src/finance.cpp
 	g++ -c src/finance.cpp -o output/finance.o -I./src
-
 clean:
 	$(RM)
-	

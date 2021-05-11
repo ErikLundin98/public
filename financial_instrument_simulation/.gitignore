@@ -1,0 +1,8 @@
+# .o files
+output/*.o
+
+# executable files
+*.exe
+
+# .vscode
+.vscode/

@@ -1,0 +1,143 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+dataset = read.csv("data.csv")
+summary(dataset)
+
+# Remove filename
+dataset = subset(dataset, select = -c(filename))
+
+# Scale the data
+dataset[,-grep("label", colnames(dataset))] = scale(dataset[,-grep("label", colnames(dataset))])
+
+# Convert the labels to factors to ease the process a bit
+dataset.character_labels = sort(unique(dataset$label))
+dataset = transform(dataset, label = match(label, dataset.character_labels))
+```
+Now that the data is "cleaned up", let's try to visualize the data by plotting the correlations:
+
+```{r}
+library(corrplot)
+
+corrplot(cor(dataset))
+```
+Conclusions:
+* There is a strong correlation between all MFCC features
+* The "non"-MFCC features are also strongly correlated with each other
+* No feature on its own has a strong correlation to the label, so data transformation might be needed
+
+To explore the data a bit more, let's use Principal Component Analysis. Principal Component Analysis projects the feature set onto new axes that maximize the variance along each dimension.
+```{r}
+# Extract the features from the dataset
+dataset.features = subset(dataset, select = -c(label))
+# Extract the labels from the dataset
+dataset.labels = subset(dataset, select = c(label))
+
+dataset.pca = prcomp(dataset.features, retx = TRUE)
+summary(dataset.pca)
+
+library(ggfortify)
+autoplot(dataset.pca, dataset = dataset, loadings = TRUE, loadings.label=TRUE)
+
+library(factoextra)
+fviz_eig(dataset.pca)
+```
+We now have a new feature space that consists of 28 principal components. There are not really any principal components that explain a superior amount of the variance (the first component explains 30%), so let's not use the new feature space yet.
+
+I want to try to use a simple classifier like knn, but first let't partition the data into training and test sets
+```{r}
+percent_train = 0.75
+train_indices = sample(nrow(dataset), floor(percent_train*nrow(dataset)))
+dataset.train = dataset[train_indices,]
+dataset.train.features = subset(dataset.train, select = -c(label))
+dataset.train.labels = subset(dataset.train, select = c(label))
+
+dataset.test = dataset[-train_indices,]
+dataset.test.features = subset(dataset.test, select = -c(label))
+dataset.test.labels = subset(dataset.test, select = c(label))
+```
+
+Now, let's fit one LASSO model and examine the results:
+
+On its own, it performs rather poorly. We might be able 
+```{r}
+glm_fit = cv.glmnet(as.matrix(dataset.train.features), alpha = 1, as.matrix(dataset.train.labels), family = "multinomial")
+
+glm_pred = predict(glm_fit, newx = as.matrix(dataset.test.features), type = "class")
+
+glm_table = table(glm_pred, as.character(dataset.test.labels$label))
+sum(diag(glm_table))/sum(glm_table)
+```
+On its own, it performs rather poorly. One method that could improve the results could first of all be to select variables by implementing stability selection. This is done by using a randomized lasso (e.g. alpha = 0.5), and fit a LASSO model to a bootstrap sample of the original data a certain amount of times, for a certain set of lambdas. We then compute the probability \pi that a certain variable is used over these bootstrap samples, and if for any of the chosen lambdas that probability \pi exceeds a threshold value \pi_{thr}, the variable is considered important and will be kept. if \pi < \pi_{thr}, the variable is considered unstable and might only provide noise to our data, so we remove it.
+
+```{r}
+pi_thr = 0.7
+glm_alpha = 0.5 # Since randomized lasso
+bootstrap_iterations = 1000 # Bootstrap iterations
+lambda_set = c(1:100)/100 # A set of lambdas to try
+n_lambda = length(lambda_set)
+
+# For the stability selection, we can use the full dataset
+features = as.matrix(dataset.features)
+labels = as.matrix(dataset.labels)
+labels = as.numeric(labels)
+
+matr = matrix(0L, ncol = ncol(features), nrow = n_lambda)
+probabilities = data.frame(matr) # Create a dataframe to store the probabilities for each variable and lambda
+
+for(i in 1:bootstrap_iterations) {
+  indices = sample(1:nrow(features), nrow(features)/2) # Create a bootstrap sample of 50% of the whole dataset
+  bootstrap.features = features[indices,]
+  bootstrap.labels = labels[indices]
+  random_lasso = glmnet(bootstrap.features, bootstrap.labels, lambda = lambda_set, alpha = glm_alpha)
+  # If variable is used, set it to 1 in the probability dataframe:
+  # (Using the beta values from the glm model since they are the model weights)
+  p = as.data.frame(t(as.matrix(random_lasso$beta)))
+  p[] = as.integer(p[] != 0)
+  
+  # Add up the results to the dataframe
+  probabilities = probabilities + p
+}
+
+# Divide by amount of bootstrap samples to get probabilities
+probabilities = probabilities/bootstrap_iterations
+probabilities
+# Now, lets find the maximum probability for each variable
+max_pi_per_lambda = apply(probabilities, 2, function(x) max(x))
+stable_variables = which(max_pi_per_lambda >= pi_thr)
+stable_variables
+
+# print the names of the variables
+colnames(dataset)[stable_variables]
+
+#print the names of the unstable variables
+colnames(dataset)[-stable_variables]
+max_pi_per_lambda
+```
+It seems as if all features are stable, so we cannot discard any of them based on our stability test. One other way to improve the performance of our model is to change it into a model based decision tree, a tree which trains a model on a partition of the data in each node:
+```{r}
+library(partykit)
+fit_fuction = function(y, x, start = NULL, weights = NULL, offset = NULL, ..., estfun = TRUE, object = TRUE) {
+  object = glmnet(as.matrix(x), as.matrix(y), family = "multinomial", offset = offset, ...)
+  coefficients = coef(object)
+  estfun = cbind(object$beta, object$a0)
+  objfun=object$
+  
+  return(list(coefficients = coefficients, obj))
+}
+```
+
+
+```{r}
+library(neuralnet)
+
+net = neuralnet(label ~ ., data = dataset, hidden = c(10, 10, 10, 10))
+```
+
