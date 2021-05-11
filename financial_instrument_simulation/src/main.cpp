@@ -49,7 +49,7 @@ int main() {
         #ifdef _WIN32
             Sleep(25);
         #else
-            usleep(500000)
+            usleep(500000);
         #endif
         file.close();
         gnu("replot");

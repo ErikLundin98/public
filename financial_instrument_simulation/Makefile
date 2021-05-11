@@ -4,9 +4,9 @@ else
     RM = rm -f simulator ./output/*.o
 endif
 
-
 # Using windows and g++
 simulator: output/main.o output/finance.o
+	mkdir output
 	g++ output/main.o output/finance.o -o simulator
 
 output/main.o: src/main.cpp
